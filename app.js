@@ -41,6 +41,37 @@ const CAT_MAP = {
   'scarpins': 'scarpin'
 };
 
+// Subcategories to extract from product names
+const SUBCAT_KEYWORDS = [
+  { key: 'anabela', label: 'Anabela' },
+  { key: 'flatform', label: 'Flatform' },
+  { key: 'meia pata', label: 'Meia Pata' },
+  { key: 'plataforma', label: 'Plataforma' },
+  { key: 'papete', label: 'Papete' },
+  { key: 'slingback', label: 'Slingback' },
+  { key: 'boneca', label: 'Boneca' },
+  { key: 'mule', label: 'Mule' },
+  { key: 'salto', label: 'Salto' },
+  { key: 'bico fino', label: 'Bico Fino' },
+  { key: 'tratorad', label: 'Tratorada' },
+  { key: 'pedraria', label: 'Pedraria' },
+  { key: 'slide', label: 'Slide' },
+  { key: 'amarra', label: 'Amarração' },
+  { key: 'fivela', label: 'Fivela' },
+  { key: 'corrente', label: 'Corrente' }
+];
+
+function parseSubcategory(name) {
+  if (!name) return 'Clásicos';
+  const lower = name.toLowerCase();
+  for (const sub of SUBCAT_KEYWORDS) {
+    if (lower.includes(sub.key)) {
+      return sub.label;
+    }
+  }
+  return 'Clásicos';
+}
+
 // ── FORMAT ───────────────────────────────
 function formatBs(n) {
   return 'Bs ' + Number(n).toLocaleString('es-BO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -81,6 +112,7 @@ function renderCard(p) {
   const sizes = SIZES[catKey] || SIZES.scarpin;
   const sizeOptions = sizes.map(s => `<option value="${s}">Talla ${s}</option>`).join('');
   const name = fixEncoding(p.name);
+  const origPrice = formatBs(Math.ceil(p.price * 1.20));
 
   return `
     <div class="product-card" data-sku="${p.sku}">
@@ -103,6 +135,7 @@ function renderCard(p) {
         </div>
         <div class="product-price-row">
           <span class="product-price">${formatBs(p.price)}</span>
+          <span class="product-price-orig">${origPrice}</span>
         </div>
       </div>
       <div class="product-actions">
@@ -121,21 +154,38 @@ function renderCard(p) {
 let allProcessedProducts = {};
 
 function distributeProducts(productsArray) {
-  const grouped = { mules: [], peeptoe: [], rasteiras: [], sapatilhas: [], sandalias: [], scarpin: [], tamancos: [] };
+  const grouped = { mules: {}, peeptoe: {}, rasteiras: {}, sapatilhas: {}, sandalias: {}, scarpin: {}, tamancos: {} };
   productsArray.forEach(p => {
-    const catRaw = (p.cat || '').trim().toLowerCase();
-    const key = CAT_MAP[catRaw];
-    if (key && grouped[key]) {
-      grouped[key].push(p);
+    let mainCat = CAT_MAP[(p.cat || '').trim().toLowerCase()];
+    if (!mainCat) {
+      const n = (p.name || '').toLowerCase();
+      if (n.includes('scarpin')) mainCat = 'scarpin';
+      else if (n.includes('peep toe') || n.includes('peeptoe')) mainCat = 'peeptoe';
+      else if (n.includes('mule')) mainCat = 'mules';
+      else if (n.includes('rasteira')) mainCat = 'rasteiras';
+      else if (n.includes('sapatilha')) mainCat = 'sapatilhas';
+      else if (n.includes('tamanco')) mainCat = 'tamancos';
+      else mainCat = 'sandalias';
+    }
+
+    const subCat = parseSubcategory(p.name);
+
+    if (grouped[mainCat]) {
+      if (!grouped[mainCat][subCat]) {
+        grouped[mainCat][subCat] = [];
+      }
+      p.subCat = subCat;
+      grouped[mainCat][subCat].push(p);
     }
   });
   return grouped;
 }
 
+let navBuilt = false; // State to track dynamic nav building
+
 function renderAll(filterText = '') {
   const data = typeof STORE_DATA !== 'undefined' ? STORE_DATA : (window.STORE_DATA || []);
 
-  // Filter if text exists (by name or sku)
   const lowerFilter = filterText.toLowerCase().trim();
   const filteredData = lowerFilter
     ? data.filter(p =>
@@ -145,6 +195,11 @@ function renderAll(filterText = '') {
     : data;
 
   allProcessedProducts = distributeProducts(filteredData);
+
+  if (!navBuilt && filterText === '') {
+    buildNavDropdowns();
+    navBuilt = true;
+  }
 
   const grids = {
     sandalias: 'grid-sandalias',
@@ -161,38 +216,66 @@ function renderAll(filterText = '') {
   Object.entries(grids).forEach(([cat, id]) => {
     const el = document.getElementById(id);
     if (!el) return;
-    const items = allProcessedProducts[cat] || [];
+    const subCatsObj = allProcessedProducts[cat] || {};
+    const itemsCount = Object.values(subCatsObj).reduce((sum, arr) => sum + arr.length, 0);
 
-    // Also hide/show the entire section if filtering and no items exist on this specific category
     const sectionEl = el.closest('.category-section');
-    if (lowerFilter && items.length === 0) {
+    if (lowerFilter && itemsCount === 0) {
       if (sectionEl) sectionEl.style.display = 'none';
       return;
+    } else if (!lowerFilter && itemsCount === 0) {
+      if (sectionEl) sectionEl.style.display = 'block';
     } else {
       if (sectionEl) sectionEl.style.display = 'block';
       hasAnyMatches = true;
     }
 
-    if (!items.length) {
+    let html = '';
+    const sortedSubCats = Object.keys(subCatsObj).sort((a, b) => {
+      if (a === 'Clásicos') return 1;
+      if (b === 'Clásicos') return -1;
+      return a.localeCompare(b);
+    });
+
+    sortedSubCats.forEach(sub => {
+      const chunkHtml = subCatsObj[sub].map(renderCard).join('');
+      const subId = `${cat}-${sub.replace(/\\s+/g, '-').toLowerCase()}`;
+      html += `
+         <div class="subcategory-group" id="${subId}">
+           <h3 class="subcategory-title">${sub}</h3>
+           <div class="products-grid">
+             ${chunkHtml}
+           </div>
+         </div>
+       `;
+    });
+
+    if (html !== '') {
+      el.className = 'category-content';
+      el.innerHTML = html;
+    } else {
+      el.className = 'products-grid';
       el.innerHTML = '<div class="loading-products" style="color:var(--muted)">Sin disponibilidad momentánea.</div>';
-      return;
     }
-    el.innerHTML = items.map(renderCard).join('');
   });
 
-  // Notice if absolutely nothing found
   if (lowerFilter && !hasAnyMatches) {
     const lastGrid = document.getElementById(grids['sandalias']);
-    if (lastGrid) lastGrid.parentElement.style.display = 'block';
-    if (lastGrid) lastGrid.innerHTML = `<div class="loading-products" style="color:var(--muted); padding: 2rem;">No se encontraron productos para "${filterText}".</div>`;
+    if (lastGrid) {
+      lastGrid.parentElement.style.display = 'block';
+      lastGrid.className = 'products-grid';
+      lastGrid.innerHTML = `<div class="loading-products" style="color:var(--muted); padding: 2rem; grid-column: 1/-1">No se encontraron productos para "${filterText}".</div>`;
+    }
   }
 }
 
 // ── GET PRODUCT BY SKU ───────────────────
 function getProduct(sku) {
-  for (const list of Object.values(allProcessedProducts)) {
-    const p = list.find(x => x.sku === sku);
-    if (p) return p;
+  for (const subCatsObj of Object.values(allProcessedProducts)) {
+    for (const list of Object.values(subCatsObj)) {
+      const p = list.find(x => x.sku === sku);
+      if (p) return p;
+    }
   }
   return null;
 }
@@ -295,11 +378,71 @@ function closeCart() {
   document.body.style.overflow = '';
 }
 
-// ── NAV SCROLL SPY ───────────────────────
+// ── NAV ACTIONS & SCROLL SPY ───────────────────────
+function buildNavDropdowns() {
+  const navCats = [
+    { id: 'sandalias', label: 'Sandalias' },
+    { id: 'rasteiras', label: 'Rasteiras' },
+    { id: 'mules', label: 'Mules' },
+    { id: 'sapatilhas', label: 'Sapatilhas' },
+    { id: 'peeptoe', label: 'Peep Toe' },
+    { id: 'scarpin', label: 'Scarpin' },
+    { id: 'tamancos', label: 'Tamancos' }
+  ];
+
+  const navEl = document.getElementById('navCategories');
+  if (!navEl) return;
+
+  let html = '';
+  navCats.forEach(catInfo => {
+    const subCatsObj = allProcessedProducts[catInfo.id] || {};
+    const subCats = Object.keys(subCatsObj).sort((a, b) => {
+      if (a === 'Clásicos') return 1;
+      if (b === 'Clásicos') return -1;
+      return a.localeCompare(b);
+    });
+
+    if (subCats.length > 0) {
+      let dropdownHtml = '<div class="nav-dropdown">';
+      subCats.forEach(sub => {
+        const subId = `${catInfo.id}-${sub.replace(/\\s+/g, '-').toLowerCase()}`;
+        dropdownHtml += `<a href="#${catInfo.id}" class="nav-dropdown-link" onclick="scrollToSubcat(event, '${catInfo.id}', '${subId}')">${sub}</a>`;
+      });
+      dropdownHtml += '</div>';
+
+      html += `
+            <div class="nav-item has-dropdown">
+                <a href="#${catInfo.id}" class="nav-link" data-cat="${catInfo.id}">${catInfo.label}</a>
+                ${dropdownHtml}
+            </div>
+            `;
+    } else {
+      html += `
+            <div class="nav-item">
+                <a href="#${catInfo.id}" class="nav-link" data-cat="${catInfo.id}">${catInfo.label}</a>
+            </div>
+            `;
+    }
+  });
+
+  navEl.innerHTML = html;
+}
+
+window.scrollToSubcat = function (e, catId, subId) {
+  e.preventDefault();
+  const section = document.getElementById(catId);
+  let target = document.getElementById(subId);
+  if (!target) target = section;
+  if (target) {
+    const y = target.getBoundingClientRect().top + window.scrollY - 180;
+    window.scrollTo({ top: y, behavior: 'smooth' });
+  }
+}
+
 function updateNav() {
   const cats = ['sandalias', 'rasteiras', 'mules', 'sapatilhas', 'peeptoe', 'scarpin', 'tamancos'];
   let active = cats[0];
-  const y = window.scrollY + 100;
+  const y = window.scrollY + 200;
   cats.forEach(id => {
     const el = document.getElementById(id);
     if (el && el.offsetTop <= y) active = id;
