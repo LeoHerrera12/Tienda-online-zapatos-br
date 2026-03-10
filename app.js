@@ -93,7 +93,7 @@ function renderCard(p) {
         />
       </div>
       <div class="product-body">
-        <h3 class="product-name">${name}</h3>
+        <h3 class="product-name">${name} <span style="font-size: 0.75rem; color: var(--muted); font-weight: 500; margin-left: 4px;">(${p.sku})</span></h3>
         <div class="size-selector">
           <span class="size-label">Seleccione Talla</span>
           <select class="size-select" id="size-${p.sku}" aria-label="Talla">
@@ -132,9 +132,19 @@ function distributeProducts(productsArray) {
   return grouped;
 }
 
-function renderAll() {
+function renderAll(filterText = '') {
   const data = typeof STORE_DATA !== 'undefined' ? STORE_DATA : (window.STORE_DATA || []);
-  allProcessedProducts = distributeProducts(data);
+
+  // Filter if text exists (by name or sku)
+  const lowerFilter = filterText.toLowerCase().trim();
+  const filteredData = lowerFilter
+    ? data.filter(p =>
+      (p.name && p.name.toLowerCase().includes(lowerFilter)) ||
+      (p.sku && p.sku.toLowerCase().includes(lowerFilter))
+    )
+    : data;
+
+  allProcessedProducts = distributeProducts(filteredData);
 
   const grids = {
     sandalias: 'grid-sandalias',
@@ -146,16 +156,36 @@ function renderAll() {
     tamancos: 'grid-tamancos',
   };
 
+  let hasAnyMatches = false;
+
   Object.entries(grids).forEach(([cat, id]) => {
     const el = document.getElementById(id);
     if (!el) return;
     const items = allProcessedProducts[cat] || [];
+
+    // Also hide/show the entire section if filtering and no items exist on this specific category
+    const sectionEl = el.closest('.category-section');
+    if (lowerFilter && items.length === 0) {
+      if (sectionEl) sectionEl.style.display = 'none';
+      return;
+    } else {
+      if (sectionEl) sectionEl.style.display = 'block';
+      hasAnyMatches = true;
+    }
+
     if (!items.length) {
       el.innerHTML = '<div class="loading-products" style="color:var(--muted)">Sin disponibilidad momentánea.</div>';
       return;
     }
     el.innerHTML = items.map(renderCard).join('');
   });
+
+  // Notice if absolutely nothing found
+  if (lowerFilter && !hasAnyMatches) {
+    const lastGrid = document.getElementById(grids['sandalias']);
+    if (lastGrid) lastGrid.parentElement.style.display = 'block';
+    if (lastGrid) lastGrid.innerHTML = `<div class="loading-products" style="color:var(--muted); padding: 2rem;">No se encontraron productos para "${filterText}".</div>`;
+  }
 }
 
 // ── GET PRODUCT BY SKU ───────────────────
@@ -288,6 +318,13 @@ function init() {
     if (cart.length) window.open(cartWA(cart), '_blank');
   });
   window.addEventListener('scroll', updateNav, { passive: true });
+
+  const searchInput = document.getElementById('searchInput');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      renderAll(e.target.value);
+    });
+  }
 
   // Use the local static data generated
   if (typeof STORE_DATA !== 'undefined' || window.STORE_DATA) {
