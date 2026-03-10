@@ -915,9 +915,9 @@ body {
   .nav-categories {
     order: 3;
     width: 100%;
-    overflow-x: auto;
+    flex-wrap: wrap;
     padding-bottom: 0.5rem;
-    justify-content: flex-start;
+    justify-content: center;
   }
 
   .search-box {
