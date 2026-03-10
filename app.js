@@ -20,12 +20,25 @@ const SIZES = {
 // Map sheet CATEGORIA → internal cat key
 const CAT_MAP = {
   'mule': 'mules',
+  'mules': 'mules',
   'sandalia plana': 'rasteiras',
+  'rasteira': 'rasteiras',
+  'rasteiras': 'rasteiras',
+  'sandalia casual': 'rasteiras',
   'sapatilha': 'sapatilhas',
+  'sapatilhas': 'sapatilhas',
+  'bailarina': 'sapatilhas',
   'zuecos': 'tamancos',
+  'zueco': 'tamancos',
+  'tamanco': 'tamancos',
+  'tamancos': 'tamancos',
   'sandalia con tacon': 'sandalias',
+  'sandalia': 'sandalias',
+  'sandalias': 'sandalias',
   'peep toe': 'peeptoe',
+  'peeptoe': 'peeptoe',
   'scarpin': 'scarpin',
+  'scarpins': 'scarpin'
 };
 
 // ── FORMAT ───────────────────────────────
@@ -33,17 +46,29 @@ function formatBs(n) {
   return 'Bs ' + Number(n).toLocaleString('es-BO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
+// ── FIX ENCODING ────────────────────────
+function fixEncoding(str) {
+  if (!str) return '';
+  try {
+    return decodeURIComponent(escape(str));
+  } catch (e) {
+    return str;
+  }
+}
+
 // ── WHATSAPP HELPERS ─────────────────────
 function singleWA(p, size) {
   const sizeStr = size ? `Talla: *${size}*\n` : 'Talla: ___\n';
-  const msg = `Hola! Me interesa este calzado de la Boutique:\n\n✨ *${p.name}*\nRef: ${p.sku}\n${sizeStr}Valor: *${formatBs(p.price)}*\n\n¿Tienen disponibilidad?`;
+  const name = fixEncoding(p.name);
+  const msg = `Hola! Me interesa este calzado de la Boutique:\n\n✨ *${name}*\nRef: ${p.sku}\n${sizeStr}Valor: *${formatBs(p.price)}*\n\n¿Tienen disponibilidad?`;
   return `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(msg)}`;
 }
 
 function cartWA(items) {
   let msg = '¡Hola Boutique Femenina! Quiero completar este pedido:\n\n';
   items.forEach((item, i) => {
-    msg += `0${i + 1}. ✨ *${item.name}*\n   Ref: ${item.sku} | Talla: *${item.size || '___'}* | ${formatBs(item.price)}\n\n`;
+    const name = fixEncoding(item.name);
+    msg += `0${i + 1}. ✨ *${name}*\n   Ref: ${item.sku} | Talla: *${item.size || '___'}* | ${formatBs(item.price)}\n\n`;
   });
   const total = items.reduce((s, x) => s + x.price, 0);
   msg += `*Total estimado: ${formatBs(total)}*\n\nQuedo atenta, gracias.`;
@@ -55,6 +80,7 @@ function renderCard(p) {
   const catKey = CAT_MAP[(p.cat || '').toLowerCase()] || 'scarpin';
   const sizes = SIZES[catKey] || SIZES.scarpin;
   const sizeOptions = sizes.map(s => `<option value="${s}">Talla ${s}</option>`).join('');
+  const name = fixEncoding(p.name);
 
   return `
     <div class="product-card" data-sku="${p.sku}">
@@ -62,12 +88,12 @@ function renderCard(p) {
         <img
           class="product-img" loading="lazy"
           src="${p.img}"
-          alt="${p.name.replace(/"/g, '&quot;')}"
+          alt="${name.replace(/"/g, '&quot;')}"
           onerror="this.onerror=null;this.src='https://placehold.co/400x400/F5EDE4/C9A092?text=Boutique+Femenina';"
         />
       </div>
       <div class="product-body">
-        <h3 class="product-name">${p.name}</h3>
+        <h3 class="product-name">${name}</h3>
         <div class="size-selector">
           <span class="size-label">Seleccione Talla</span>
           <select class="size-select" id="size-${p.sku}" aria-label="Talla">
@@ -107,7 +133,8 @@ function distributeProducts(productsArray) {
 }
 
 function renderAll() {
-  allProcessedProducts = distributeProducts(window.STORE_DATA || []);
+  const data = typeof STORE_DATA !== 'undefined' ? STORE_DATA : (window.STORE_DATA || []);
+  allProcessedProducts = distributeProducts(data);
 
   const grids = {
     sandalias: 'grid-sandalias',
@@ -208,17 +235,19 @@ function updateCartUI() {
   if (footerEl) footerEl.style.display = 'flex';
   const total = cart.reduce((s, x) => s + x.price, 0);
 
-  itemsEl.innerHTML = cart.map(item => `
+  itemsEl.innerHTML = cart.map(item => {
+    const name = fixEncoding(item.name);
+    return `
     <div class="cart-item">
-      <img src="${item.img}" alt="${item.name.replace(/"/g, '&quot;')}" onerror="this.src='https://placehold.co/60x60/F5EDE4/C9A092?text=+';" />
+      <img src="${item.img}" alt="${name.replace(/"/g, '&quot;')}" onerror="this.src='https://placehold.co/60x60/F5EDE4/C9A092?text=+';" />
       <div class="cart-item-info">
-        <div class="cart-item-name">${item.name}</div>
+        <div class="cart-item-name">${name}</div>
         <div class="cart-item-size">Talla: ${item.size}</div>
         <div class="cart-item-price">${formatBs(item.price)}</div>
       </div>
       <button class="cart-item-remove" onclick="removeFromCart('${item.id}')">✕</button>
     </div>
-  `).join('');
+  `}).join('');
 
   document.getElementById('cartTotal').textContent = formatBs(total);
 }
@@ -261,7 +290,7 @@ function init() {
   window.addEventListener('scroll', updateNav, { passive: true });
 
   // Use the local static data generated
-  if (window.STORE_DATA) {
+  if (typeof STORE_DATA !== 'undefined' || window.STORE_DATA) {
     renderAll();
   } else {
     console.error("STORE_DATA not found. Please run the build script.");
