@@ -9,7 +9,6 @@ const WHATSAPP = '59169113130';
 // Typical sizes for each category
 const SIZES = {
   mules: ['34', '35', '36', '37', '38', '39', '40'],
-  peeptoe: ['34', '35', '36', '37', '38', '39', '40'],
   rasteiras: ['33', '34', '35', '36', '37', '38', '39', '40'],
   sapatilhas: ['33', '34', '35', '36', '37', '38', '39', '40'],
   sandalias: ['33', '34', '35', '36', '37', '38', '39', '40'],
@@ -35,13 +34,15 @@ const CAT_MAP = {
   'sandalia con tacon': 'sandalias',
   'sandalia': 'sandalias',
   'sandalias': 'sandalias',
-  'peep toe': 'peeptoe',
-  'peeptoe': 'peeptoe',
   'scarpin': 'scarpin',
-  'scarpins': 'scarpin'
+  'scarpins': 'scarpin',
+  'tacón': 'scarpin',
+  'tacon': 'scarpin',
+  'otros': 'sapatilhas'
 };
 
 // Subcategories to extract from product names
+// Order matters: more specific keywords first, broader ones last
 const SUBCAT_KEYWORDS = [
   { key: 'anabela', label: 'Anabela' },
   { key: 'flatform', label: 'Flatform' },
@@ -50,22 +51,38 @@ const SUBCAT_KEYWORDS = [
   { key: 'papete', label: 'Papete' },
   { key: 'slingback', label: 'Slingback' },
   { key: 'boneca', label: 'Boneca' },
-  { key: 'mule', label: 'Mule' },
+  { key: 'espadrille', label: 'Espadrille' },
+  { key: 'salto fino', label: 'Salto Fino' },
+  { key: 'salto bloco', label: 'Salto Bloco' },
+  { key: 'salto grosso', label: 'Salto Grosso' },
+  { key: 'salto geometrico', label: 'Salto Geométrico' },
+  { key: 'salto geom', label: 'Salto Geométrico' },
+  { key: 'salto flare', label: 'Salto Flare' },
+  { key: 'salto taca', label: 'Salto Taça' },
+  { key: 'salto taça', label: 'Salto Taça' },
+  { key: 'salto medio', label: 'Salto Medio' },
+  { key: 'salto alto', label: 'Salto Alto' },
   { key: 'salto', label: 'Salto' },
-  { key: 'bico fino', label: 'Bico Fino' },
-  { key: 'tratorad', label: 'Tratorada' },
-  { key: 'pedraria', label: 'Pedraria' },
-  { key: 'slide', label: 'Slide' },
   { key: 'amarra', label: 'Amarração' },
-  { key: 'fivela', label: 'Fivela' },
-  { key: 'corrente', label: 'Corrente' }
+  { key: 'rasteira', label: 'Rasteira' },
 ];
 
-function parseSubcategory(name) {
+// Subcategories to skip per main category (redundant)
+const SKIP_SUB_FOR_CAT = {
+  mules: ['Mule'],
+  rasteiras: ['Rasteira'],
+};
+
+// Minimum items to form a subcategory (otherwise merged into Clásicos)
+const MIN_SUBCAT_SIZE = 4;
+
+function parseSubcategory(name, mainCat) {
   if (!name) return 'Clásicos';
   const lower = name.toLowerCase();
+  const skipList = SKIP_SUB_FOR_CAT[mainCat] || [];
   for (const sub of SUBCAT_KEYWORDS) {
     if (lower.includes(sub.key)) {
+      if (skipList.includes(sub.label)) continue;
       return sub.label;
     }
   }
@@ -154,13 +171,12 @@ function renderCard(p) {
 let allProcessedProducts = {};
 
 function distributeProducts(productsArray) {
-  const grouped = { mules: {}, peeptoe: {}, rasteiras: {}, sapatilhas: {}, sandalias: {}, scarpin: {}, tamancos: {} };
+  const grouped = { mules: {}, rasteiras: {}, sapatilhas: {}, sandalias: {}, scarpin: {}, tamancos: {} };
   productsArray.forEach(p => {
     let mainCat = CAT_MAP[(p.cat || '').trim().toLowerCase()];
     if (!mainCat) {
       const n = (p.name || '').toLowerCase();
       if (n.includes('scarpin')) mainCat = 'scarpin';
-      else if (n.includes('peep toe') || n.includes('peeptoe')) mainCat = 'peeptoe';
       else if (n.includes('mule')) mainCat = 'mules';
       else if (n.includes('rasteira')) mainCat = 'rasteiras';
       else if (n.includes('sapatilha')) mainCat = 'sapatilhas';
@@ -168,7 +184,7 @@ function distributeProducts(productsArray) {
       else mainCat = 'sandalias';
     }
 
-    const subCat = parseSubcategory(p.name);
+    const subCat = parseSubcategory(p.name, mainCat);
 
     if (grouped[mainCat]) {
       if (!grouped[mainCat][subCat]) {
@@ -206,7 +222,6 @@ function renderAll(filterText = '') {
     rasteiras: 'grid-rasteiras',
     mules: 'grid-mules',
     sapatilhas: 'grid-sapatilhas',
-    peeptoe: 'grid-peeptoe',
     scarpin: 'grid-scarpin',
     tamancos: 'grid-tamancos',
   };
@@ -230,15 +245,27 @@ function renderAll(filterText = '') {
       hasAnyMatches = true;
     }
 
+    // Merge tiny subcategories into Clásicos
+    const merged = {};
+    Object.entries(subCatsObj).forEach(([sub, items]) => {
+      if (sub !== 'Clásicos' && items.length < MIN_SUBCAT_SIZE) {
+        if (!merged['Clásicos']) merged['Clásicos'] = [];
+        merged['Clásicos'].push(...items);
+      } else {
+        if (!merged[sub]) merged[sub] = [];
+        merged[sub].push(...items);
+      }
+    });
+
     let html = '';
-    const sortedSubCats = Object.keys(subCatsObj).sort((a, b) => {
+    const sortedSubCats = Object.keys(merged).sort((a, b) => {
       if (a === 'Clásicos') return 1;
       if (b === 'Clásicos') return -1;
       return a.localeCompare(b);
     });
 
     sortedSubCats.forEach(sub => {
-      const chunkHtml = subCatsObj[sub].map(renderCard).join('');
+      const chunkHtml = merged[sub].map(renderCard).join('');
       const subId = `${cat}-${sub.replace(/\\s+/g, '-').toLowerCase()}`;
       html += `
          <div class="subcategory-group" id="${subId}">
@@ -385,7 +412,6 @@ function buildNavDropdowns() {
     { id: 'rasteiras', label: 'Rasteiras' },
     { id: 'mules', label: 'Mules' },
     { id: 'sapatilhas', label: 'Sapatilhas' },
-    { id: 'peeptoe', label: 'Peep Toe' },
     { id: 'scarpin', label: 'Scarpin' },
     { id: 'tamancos', label: 'Tamancos' }
   ];
@@ -396,13 +422,24 @@ function buildNavDropdowns() {
   let html = '';
   navCats.forEach(catInfo => {
     const subCatsObj = allProcessedProducts[catInfo.id] || {};
-    const subCats = Object.keys(subCatsObj).sort((a, b) => {
+    // Apply same merging logic as grid rendering
+    const merged = {};
+    Object.entries(subCatsObj).forEach(([sub, items]) => {
+      if (sub !== 'Clásicos' && items.length < MIN_SUBCAT_SIZE) {
+        if (!merged['Clásicos']) merged['Clásicos'] = [];
+        merged['Clásicos'].push(...items);
+      } else {
+        if (!merged[sub]) merged[sub] = [];
+        merged[sub].push(...items);
+      }
+    });
+    const subCats = Object.keys(merged).sort((a, b) => {
       if (a === 'Clásicos') return 1;
       if (b === 'Clásicos') return -1;
       return a.localeCompare(b);
     });
 
-    if (subCats.length > 0) {
+    if (subCats.length > 1) {
       let dropdownHtml = '<div class="nav-dropdown">';
       subCats.forEach(sub => {
         const subId = `${catInfo.id}-${sub.replace(/\\s+/g, '-').toLowerCase()}`;
@@ -440,7 +477,7 @@ window.scrollToSubcat = function (e, catId, subId) {
 }
 
 function updateNav() {
-  const cats = ['sandalias', 'rasteiras', 'mules', 'sapatilhas', 'peeptoe', 'scarpin', 'tamancos'];
+  const cats = ['sandalias', 'rasteiras', 'mules', 'sapatilhas', 'scarpin', 'tamancos'];
   let active = cats[0];
   const y = window.scrollY + 200;
   cats.forEach(id => {
