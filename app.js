@@ -1,10 +1,10 @@
 /* ==========================================
-   Boutique Femenina — Main App
+   Espacio Femenino — Main App
    Loads products from static data.js
    Cart, WhatsApp, Size Selection, Nav
    ========================================== */
 
-const WHATSAPP = '59169113130';
+const WHATSAPP = '59177258757';
 
 // Typical sizes for each category
 const SIZES = {
@@ -108,12 +108,12 @@ function fixEncoding(str) {
 function singleWA(p, size) {
   const sizeStr = size ? `Talla: *${size}*\n` : 'Talla: ___\n';
   const name = fixEncoding(p.name);
-  const msg = `Hola! Me interesa este calzado de la Boutique:\n\n✨ *${name}*\nRef: ${p.sku}\n${sizeStr}Valor: *${formatBs(p.price)}*\n\n¿Tienen disponibilidad?`;
+  const msg = `Hola! Me interesa este calzado de Espacio Femenino:\n\n✨ *${name}*\nRef: ${p.sku}\n${sizeStr}Valor: *${formatBs(p.price)}*\n\n¿Tienen disponibilidad?`;
   return `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(msg)}`;
 }
 
 function cartWA(items) {
-  let msg = '¡Hola Boutique Femenina! Quiero completar este pedido:\n\n';
+  let msg = '¡Hola Espacio Femenino! Quiero completar este pedido:\n\n';
   items.forEach((item, i) => {
     const name = fixEncoding(item.name);
     msg += `0${i + 1}. ✨ *${name}*\n   Ref: ${item.sku} | Talla: *${item.size || '___'}* | ${formatBs(item.price)}\n\n`;
@@ -138,7 +138,7 @@ function renderCard(p) {
           class="product-img" loading="lazy"
           src="${p.img}"
           alt="${name.replace(/"/g, '&quot;')}"
-          onerror="this.onerror=null;this.src='https://placehold.co/400x400/F5EDE4/C9A092?text=Boutique+Femenina';"
+          onerror="this.onerror=null;this.src='https://placehold.co/400x400/F5EDE4/C9A092?text=Espacio+Femenino';"
         />
       </div>
       <div class="product-body">
